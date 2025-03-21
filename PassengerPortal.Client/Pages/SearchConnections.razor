@@ -1,0 +1,345 @@
+@page "/search-connections"
+@using PassengerPortal.Shared.Strategies
+@using PassengerPortal.Shared.Interfaces
+@using PassengerPortal.Shared.Models
+@using PassengerPortal.Shared.Representations
+@using PassengerPortal.Shared.Strategies
+
+
+@inject PassengerPortal.Client.Services.ApiService ApiService
+
+<h3>Wyszukiwanie Połączeń</h3>
+
+@if (stations == null && string.IsNullOrEmpty(errorMessage))
+{
+<p><em>Ładowanie stacji...</em></p>
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+<div class="alert alert-danger">@errorMessage</div>
+}
+else
+{
+<EditForm Model="searchModel" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label for="startStation" class="form-label">Stacja Początkowa</label>
+        <InputSelect id="startStation" class="form-select" @bind-Value="searchModel.StartStationId">
+            <option value="">-- Wybierz stację --</option>
+            @foreach (var station in stations)
+            {
+            <option value="@station.Id">@station.Name (@station.City)</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label for="endStation" class="form-label">Stacja Końcowa</label>
+        <InputSelect id="endStation" class="form-select" @bind-Value="searchModel.EndStationId">
+            <option value="">-- Wybierz stację --</option>
+            @foreach (var station in stations)
+            {
+            <option value="@station.Id">@station.Name (@station.City)</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label for="departureTime" class="form-label">Czas Odjazdu</label>
+        <InputText id="departureTime" type="datetime-local" class="form-control" @bind-Value="searchModel.DepartureTimeString" />
+    </div>
+
+    <div class="mb-3">
+        <label for="maxResults" class="form-label">Maksymalna liczba wyników</label>
+        <InputNumber id="maxResults" class="form-control" @bind-Value="searchModel.MaxResults" min="1" max="10" />
+    </div>
+
+    
+    <div class="mb-3">
+        <label for="maximumPrice" class="form-label">Maksymalna Cena (PLN)</label>
+        <InputNumber id="maximumPrice" class="form-control" @bind-Value="searchModel.MaximumPrice" step="0.01" min="0" />
+    </div>
+
+    <div class="mb-3">
+        <label for="trainType" class="form-label">Typ Pociągu</label>
+        <InputSelect id="trainType" class="form-select" @bind-Value="searchModel.SelectedTrainType">
+            <option value="">-- Dowolny --</option>
+            @foreach (var type in Enum.GetValues(typeof(TrainType)).Cast<TrainType>())
+            {
+            <option value="@type">@type</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label for="minimumSeats" class="form-label">Minimalna Liczba Miejsc</label>
+        <InputNumber id="minimumSeats" class="form-control" @bind-Value="searchModel.MinimumSeats" min="1" />
+    </div>
+
+    
+    <div class="mb-3">
+        <label for="discountStrategy" class="form-label">Strategia Rabatowa</label>
+        <InputSelect id="discountStrategy" class="form-select" @bind-Value="searchModel.SelectedDiscountStrategy">
+            <option value="NoDiscount">Brak rabatu</option>
+            <option value="Percentage">Rabat procentowy</option>
+            <option value="FixedAmount">Rabat kwotowy</option>
+        </InputSelect>
+    </div>
+
+    
+    <div class="mb-3">
+        <label for="ticketRepresentation" class="form-label">Reprezentacja Biletu</label>
+        <InputSelect id="ticketRepresentation" class="form-select" @bind-Value="searchModel.SelectedTicketRepresentation">
+            <option value="Email">Email</option>
+            <option value="PDF">PDF</option>
+            <option value="Print">Druk</option>
+        </InputSelect>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Szukaj</button>
+</EditForm>
+
+@if (connections != null)
+{
+<h4 class="mt-4">Wyniki Wyszukiwania</h4>
+@if (connections.Count == 0)
+{
+<p>Brak dostępnych połączeń.</p>
+}
+else
+{
+<table class="table">
+    <thead>
+    <tr>
+        <th>Trasa</th>
+        <th>Czas Odjazdu</th>
+        <th>Czas Przyjazdu</th>
+        <th>Całkowity Czas</th>
+        <th>Typ Pociągu</th>
+        <th>Cena</th>
+        <th>Akcja</th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var connection in connections)
+    {
+    <tr>
+        <td>
+            @foreach (var route in connection.Routes)
+            {
+            <span>
+                                        @route.StartStation.Name -> @route.EndStation.Name
+                (@route.Duration.ToString(@"hh\:mm"))
+                                    </span><br />
+            }
+        </td>
+        <td>
+            @(
+            connection.Routes.Any()
+            ? connection.Routes.Min(r => r.DepartureDateTime).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            : "--:--"
+            )
+        </td>
+        <td>
+            @(
+            connection.Routes.Any()
+            ? connection.Routes.Max(r => r.ArrivalDateTime).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            : "--:--"
+            )
+        </td>
+        <td>@connection.TotalDuration.ToString(@"hh\:mm")</td>
+        <td>@connection.Routes.First().TrainType</td>
+        <td>@connection.TotalPrice.ToString("C")</td>
+        <td>
+            <button class="btn btn-primary" @onclick="() => PurchaseTicket(connection)">Kup Bilet</button>
+        </td>
+    </tr>
+    }
+    </tbody>
+</table>
+}
+}
+}
+
+@code {
+private List<Station> stations;
+private SearchModel searchModel = new SearchModel
+{
+DepartureTimeString = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"),
+MaxResults = 5, 
+MaximumPrice = null,
+SelectedTrainType = null,
+MinimumSeats = null,
+SelectedDiscountStrategy = "NoDiscount",
+SelectedTicketRepresentation = "Email"
+};
+private List<Connection> connections;
+private string errorMessage;
+
+protected override async Task OnInitializedAsync()
+{
+try
+{
+Console.WriteLine("Pobieranie stacji...");
+stations = await ApiService.GetStationsAsync();
+if (stations != null && stations.Any())
+{
+Console.WriteLine($"Pierwsza stacja: {stations[0].Name}");
+}
+else
+{
+Console.WriteLine("Brak stacji do wyświetlenia.");
+}
+}
+catch (Exception ex)
+{
+Console.Error.WriteLine($"Błąd podczas pobierania stacji: {ex.Message}");
+errorMessage = "Wystąpił błąd podczas ładowania stacji. Spróbuj ponownie później.";
+}
+}
+
+private async Task HandleValidSubmit()
+{
+try
+{
+
+if (!DateTime.TryParse(searchModel.DepartureTimeString, out var departureTime))
+{
+errorMessage = "Nieprawidłowy format daty i czasu.";
+return;
+}
+
+Console.WriteLine($"Wyszukiwanie połączeń: startStationId={searchModel.StartStationId}, " +
+$"endStationId={searchModel.EndStationId}, departureTime={departureTime}, " +
+$"maxResults={searchModel.MaxResults}, maximumPrice={searchModel.MaximumPrice}, " +
+$"trainType={searchModel.SelectedTrainType}, minimumSeats={searchModel.MinimumSeats}");
+
+
+connections = await ApiService.SearchConnectionsAsync(
+searchModel.StartStationId,
+searchModel.EndStationId,
+departureTime,
+searchModel.MaxResults,
+searchModel.MaximumPrice,
+searchModel.SelectedTrainType,
+searchModel.MinimumSeats
+);
+
+
+if (connections != null)
+{
+Console.WriteLine($"Znaleziono {connections.Count} połączeń.");
+foreach (var conn in connections)
+{
+Console.WriteLine($"Connection ID: {conn.Id}, TotalDuration: {conn.TotalDuration}");
+foreach (var route in conn.Routes)
+{
+Console.WriteLine($"  Route ID: {route.Id}, Departure: {route.DepartureDateTime}, Arrival: {route.ArrivalDateTime}");
+}
+}
+}
+}
+catch (Exception ex)
+{
+Console.Error.WriteLine($"Błąd podczas wyszukiwania połączeń: {ex.Message}");
+errorMessage = "Wystąpił błąd podczas wyszukiwania połączeń. Spróbuj ponownie później.";
+}
+}
+
+private async Task PurchaseTicket(Connection connection)
+{
+
+IDiscountStrategy discountStrategy = searchModel.SelectedDiscountStrategy switch
+{
+"Percentage" => new PercentageDiscountStrategy(10), 
+"FixedAmount" => new FixedAmountDiscountStrategy(20), 
+_ => new NoDiscountStrategy(),
+};
+
+
+ITicketRepresentation representation = searchModel.SelectedTicketRepresentation switch
+{
+"PDF" => new PdfRepresentation(),
+"Email" => new EmailRepresentation(),
+"Print" => new PrintRepresentation(),
+_ => new EmailRepresentation(),
+};
+
+var request = new PurchaseTicketRequest
+{
+RouteIds = connection.Routes.Select(r => r.Id).ToList(),
+DepartureDateTime = connection.Routes.First().DepartureDateTime,
+BuyerId = "1", 
+SelectedDiscountStrategy = searchModel.SelectedDiscountStrategy,
+SelectedTicketRepresentation = searchModel.SelectedTicketRepresentation
+};
+
+var response = await ApiService.PurchaseTicketAsync(request);
+if (response.IsSuccessStatusCode)
+{
+var result = await response.Content.ReadFromJsonAsync<PurchaseTicketResponse>();
+if (result != null)
+{
+
+    var selectedType = searchModel.SelectedTicketRepresentation; 
+    NavigationManager.NavigateTo($"/ticket/{result.TicketId}/{selectedType}");
+
+}
+else
+{
+errorMessage = "Bilet zakupiony, ale nie udało się pobrać reprezentacji.";
+}
+}
+else
+{
+var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+errorMessage = error?.Message ?? "Nieznany błąd podczas zakupu biletu.";
+}
+}
+
+
+public class SearchModel
+{
+public int StartStationId { get; set; }
+public int EndStationId { get; set; }
+public string DepartureTimeString { get; set; }
+public int MaxResults { get; set; } = 5; 
+
+
+public decimal? MaximumPrice { get; set; }
+public TrainType? SelectedTrainType { get; set; }
+public int? MinimumSeats { get; set; }
+
+
+public string SelectedDiscountStrategy { get; set; } = "NoDiscount"; 
+public string SelectedTicketRepresentation { get; set; } = "Email"; 
+}
+
+public class PurchaseTicketRequest
+{
+public List<int> RouteIds { get; set; }
+public DateTime DepartureDateTime { get; set; }
+public string BuyerId { get; set; }
+
+
+public string SelectedDiscountStrategy { get; set; }
+public string SelectedTicketRepresentation { get; set; }
+}
+
+public class PurchaseTicketResponse
+{
+public int TicketId { get; set; }
+public string TicketRepresentation { get; set; }
+}
+
+public class ErrorResponse
+{
+public string Message { get; set; }
+}
+
+[Inject]
+private NavigationManager NavigationManager { get; set; }
+}
+

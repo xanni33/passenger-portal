@@ -1,0 +1,52 @@
+@page "/ticket/{TicketId:int}/{Type}"
+
+@using PassengerPortal.Shared.Models
+@inject PassengerPortal.Client.Services.ApiService ApiService
+
+<h3>Bilet</h3>
+
+@if (ticketRepresentation == null && string.IsNullOrEmpty(errorMessage))
+{
+<p><em>Ładowanie biletu...</em></p>
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+<div class="alert alert-danger">@errorMessage</div>
+}
+else
+{
+<div>
+    <p>@ticketRepresentation</p>
+</div>
+}
+
+@code {
+[Parameter]
+public int TicketId { get; set; }
+[Parameter]
+public string Type { get; set; } 
+private string ticketRepresentation;
+private string errorMessage;
+
+protected override async Task OnInitializedAsync()
+{
+try
+{
+
+var response = await ApiService.GetTicketRepresentationAsync(TicketId,Type);
+if (response != null)
+{
+ticketRepresentation = response.TicketRepresentation;
+}
+else
+{
+errorMessage = "Nie udało się pobrać reprezentacji biletu.";
+}
+}
+catch (Exception ex)
+{
+Console.Error.WriteLine($"Błąd podczas pobierania biletu: {ex.Message}");
+errorMessage = "Wystąpił błąd podczas pobierania biletu. Spróbuj ponownie później.";
+}
+}
+}

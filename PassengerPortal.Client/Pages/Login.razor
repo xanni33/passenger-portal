@@ -1,0 +1,57 @@
+﻿@page "/login"
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+<h3>Logowanie</h3>
+
+<EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div>
+        <label>Login:</label>
+        <InputText @bind-Value="loginModel.Username" />
+    </div>
+    <div>
+        <label>Hasło:</label>
+        <InputText @bind-Value="loginModel.Password" />
+    </div>
+    <button type="submit">Zaloguj</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p style="color: #ac1a8e">@errorMessage</p>
+}
+
+@code {
+    private LoginModel loginModel = new();
+    private string errorMessage;
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/users/login", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                NavigationManager.NavigateTo("/");
+                // Uncomment the above line to navigate upon successful login
+            }
+            else
+            {
+                errorMessage = "Invalid login or password.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    public class LoginModel
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
+}

@@ -1,0 +1,30 @@
+﻿@page "/train-rank"
+
+<h3>Train Ranking</h3>
+
+@if (rankings == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="row">
+        @foreach (var train in rankings.Take(visibleCount))
+        {
+            <div class="col">
+                <img src="@train.ImagePath" alt="@train.Name" width="200" />
+                <p>@train.Name</p>
+                <p>Votes: @train.Votes</p>
+                <button @onclick="() => VoteForTrain(train.TrainId)">Vote</button>
+            </div>
+        }
+    </div>
+    <div>
+        <label>Visible trains:</label>
+        <select @bind="visibleCount">
+            <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="9">9</option>
+        </select>
+    </div>
+}

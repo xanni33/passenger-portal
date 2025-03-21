@@ -1,0 +1,71 @@
+@page "/register"
+@using System.Net.Http
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<h3>Rejestracja</h3>
+
+<EditForm Model="registerModel" OnValidSubmit="HandleRegister">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div>
+        <label>Login:</label>
+        <InputText @bind-Value="registerModel.Username" />
+    </div>
+    <div>
+        <label>Email:</label>
+        <InputText @bind-Value="registerModel.Email" />
+    </div>
+    <div>
+        <label>Hasło:</label>
+        <InputText @bind-Value="registerModel.Password" />
+    </div>
+    <button type="submit">Zarejestruj</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <p style="color: green">@successMessage</p>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p style="color: red">@errorMessage</p>
+}
+
+@code {
+    private RegisterModel registerModel = new();
+    private string successMessage;
+    private string errorMessage;
+
+    private async Task HandleRegister()
+    {
+        try
+        {
+            var result = await Http.PostAsJsonAsync("api/users/register", registerModel);
+
+            if (result.IsSuccessStatusCode)
+            {
+                successMessage = "Rejestracja zakończona sukcesem!";
+                errorMessage = null;
+            }
+            else
+            {
+                successMessage = null;
+                errorMessage = await result.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    public class RegisterModel
+    {
+        public string Username { get; set; }
+        public string Email { get; set; }
+        public string Password { get; set; }
+    }
+}
